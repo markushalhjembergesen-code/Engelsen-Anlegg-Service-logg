@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="nn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Engelsen Anlegg ServiceLogg v75 – Felles innlogging med Supabase</title>
+  <style>
+  body.cloud-locked > header,body.cloud-locked > main,body.cloud-locked > footer {display:none!important}
+  #cloud-gate{min-height:100vh;display:grid;place-items:center;background:#f3f6fb;padding:24px}
+  #cloud-gate[hidden]{display:none!important}
+  #cloud-gate .cloud-card{width:min(440px,100%);background:#fff;border:1px solid #cbd7ea;border-radius:18px;padding:25px;box-shadow:0 8px 24px #11224417;color:#183251}
+  #cloud-gate h1{font-size:24px;margin:0 0 10px} #cloud-gate label{display:block;font-weight:600;margin-top:14px}
+  #cloud-gate input{width:100%;margin-top:5px;border:1px solid #aebed6;border-radius:10px;padding:12px}
+  #cloud-gate button{display:block;margin-top:18px;background:#2864c5;color:white;border:0;border-radius:10px;padding:13px;width:100%;font-weight:700}
+  #cloud-gate button:disabled{opacity:.5} #cloud-message{white-space:pre-wrap;line-height:1.5;color:#8a3e00}
+  #cloud-status{position:fixed;bottom:12px;right:12px;background:#143b65;color:white;border-radius:9px;padding:10px 14px;z-index:1000;box-shadow:0 4px 10px #0002;font-size:14px}
+  #cloud-status[hidden]{display:none} #cloud-status button{color:#fff;background:transparent;border:1px solid #abbcd4;border-radius:6px;margin-left:8px;padding:4px 8px}
+  </style>
+  <style>
+    /* Standard: appinnhaldet er låst før skriptet har kontrollert innlogginga. */
+    body.auth-required .page,
+    body.auth-required #menu,
+    body.auth-required #employee-session,
+    body.auth-required #employee-access-warning,
+    body.auth-required footer { display:none !important; }
+    body.auth-required #employee-auth:not([hidden]) { display:grid; }
+
+    :root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#162a46;background:#f3f6fb}
+    *{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}
+    [hidden]{display:none!important}
+    header{background:#000000;color:#fff;padding:16px max(20px,calc((100% - 1120px)/2));display:flex;align-items:center;gap:12px;min-height:76px}
+    .logo{display:grid;place-items:center;width:52px;height:52px;flex:none}.logo img{display:block;width:100%;height:100%;object-fit:contain}
+    .brand{font-size:22px;font-weight:750;line-height:1.2;min-width:0}.ver{font-size:12px;color:#a9c1e1;white-space:nowrap}
+    .menu{margin-left:auto;position:relative}.menu summary{list-style:none;cursor:pointer;display:grid;place-items:center;width:48px;height:46px;border:1px solid #777777;border-radius:10px;background:#171717;font-size:26px}
+    .menu summary::-webkit-details-marker{display:none}.menu nav{position:absolute;right:0;top:calc(100% + 8px);z-index:10;width:260px;max-width:calc(100vw - 32px);background:white;color:#152c49;border-radius:12px;box-shadow:0 12px 34px #0c254d33;border:1px solid #d6e1ef;padding:8px}
+    .menu a{display:block;color:inherit;text-decoration:none;padding:13px;border-radius:8px;font-weight:650}.menu a:hover,.menu a.active{background:#e9f1ff;color:#1455b0}
+    main{max-width:1120px;margin:0 auto;padding:28px 20px}h1{font-size:29px;margin:0 0 20px}h2{font-size:20px;margin:0 0 18px}
+    #maskinregisteret > h1, #servicebok > h1, #rapporter > h1{color:#fff;background:#000000;padding:17px 22px;border-radius:12px;}
+    .cols{display:grid;grid-template-columns:minmax(0,410px) minmax(0,1fr);gap:20px;align-items:start}
+    .card{background:white;border:1px solid #d9e3f1;border-radius:17px;padding:25px;box-shadow:0 2px 8px #0b2c4a06}
+    .field{margin-bottom:16px}.field label{display:block;font-size:14px;font-weight:650;margin-bottom:7px}.field input,.field select{width:100%;border:1px solid #bacce1;border-radius:9px;background:#fff;color:#162a46;min-height:46px;padding:11px 12px;font-size:16px}
+    .field select{cursor:pointer}
+    .field input:focus,.field select:focus{outline:2px solid #a5c6fb;border-color:#235fc3}.optional{font-weight:400;color:#667c96}
+    .btn{border:0;border-radius:10px;padding:13px 18px;min-height:48px;font-weight:750}.primary{background:#245fc5;color:#fff}.primary:hover{background:#1b4fa9}.secondary{background:#f1f5fb;color:#24446b;border:1px solid #cbd7e8}
+    .actions{display:flex;gap:10px;flex-wrap:wrap}.note{font-size:13px;color:#64748b;line-height:1.55;margin-top:20px}
+    .notice{border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.45;margin:0 0 17px}.warning{background:#fff4d7;color:#754c08;border:1px solid #e8cc8a}.ok{background:#e8f7ed;color:#17603b;border:1px solid #b5e3c5}.error{background:#fff0f0;color:#9d2424;border:1px solid #f1b6b6}
+    .feedback{margin:15px 0 0;font-size:14px;font-weight:650;min-height:20px}.feedback.bad{color:#a92727}.feedback.good{color:#187047}
+    .listhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:17px}.listhead h2{margin:0}.count{font-size:14px;color:#61758f;white-space:nowrap}
+    .items{display:grid;gap:11px}.machine{border:1px solid #d4e0ef;border-radius:10px;overflow:hidden}.machine.new{border:2px solid #248b55}
+    .machine-top{display:flex;align-items:center;gap:6px;padding-right:12px}.machine-details{flex:1;min-width:0}
+    .machine-top summary{overflow-wrap:anywhere}.delete-shortcut{border:1px solid #e9b2b2;background:#fff0f0;color:#9b2525;border-radius:8px;padding:9px 12px;font-size:14px;font-weight:750;min-height:42px;flex:none}.delete-shortcut:hover{background:#ffe1e1}
+    .confirm-box{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff7f7;border-top:1px solid #efd0d0;padding:12px 16px;color:#7f2020}.confirm-box span{flex:1;min-width:160px;font-weight:600}.danger{background:#b42323;color:#fff}.danger:hover{background:#921c1c}
+    /* Høgaste faktiske maskintimetal, alltid synleg under namnet i Maskinregisteret. */
+    .machine-summary-main{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
+    .machine-summary-name{display:block;font-weight:800;line-height:1.35;overflow-wrap:anywhere}
+    .machine-summary-hours{display:inline-flex;align-items:center;align-self:flex-start;gap:6px;
+      border:1px solid #b6d9c8;border-radius:8px;background:#ebf8f0;color:#17633e;
+      padding:5px 9px;font-size:14px;font-weight:800;line-height:1.4;font-variant-numeric:tabular-nums}
+    .machine-summary-hours.missing{background:#f2f5fa;color:#526780;border-color:#d7e1ed;font-weight:650}
+    .machine-summary-hours-label{font-weight:650}
+    .machine-summary-note{font-size:12px;color:#526780;font-weight:500;line-height:1.4}
+    .machine summary{list-style:none;cursor:pointer;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:17px;font-weight:700}.machine summary::-webkit-details-marker{display:none}
+    .arrow{display:grid;place-items:center;width:29px;height:29px;border-radius:50%;background:#eaf1ff;color:#235fc5;flex:none}.machine-details[open] .arrow{transform:rotate(90deg)}
+    .detailbox{border-top:1px solid #dce5f0;background:#f9fbff;padding:16px}.detailbox p{margin:0 0 9px;overflow-wrap:anywhere}.detailbox strong{margin-right:5px}.detailbuttons{display:flex;gap:9px;margin-top:14px}
+    .empty{border:1px dashed #c7d6e8;border-radius:10px;padding:35px 16px;text-align:center;color:#657d99;line-height:1.5}
+    .dealer-manager{margin-top:25px;border-top:1px solid #d9e3f1;padding-top:22px}
+    .mechanic-manager{max-width:760px}
+    .dealer-manager h3{font-size:19px;margin:0 0 7px}
+    .dealer-help{font-size:14px;color:#64748b;line-height:1.5;margin:0 0 16px}
+    .dealer-add{display:flex;gap:8px;align-items:stretch}
+    .dealer-add input{flex:1;min-width:0;border:1px solid #bacce1;border-radius:9px;min-height:46px;padding:11px 12px;font-size:16px}
+    .dealer-add input:focus{outline:2px solid #a5c6fb;border-color:#235fc3}
+    .dealer-list{display:grid;gap:8px;margin-top:14px}
+    .dealer-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #d9e3f1;border-radius:9px;padding:8px 10px 8px 13px;background:#f9fbff}
+    .dealer-row span{overflow-wrap:anywhere;min-width:0}
+    .dealer-row button{flex:none;border:1px solid #e9b2b2;background:#fff0f0;color:#9b2525;border-radius:7px;padding:7px 10px;min-height:36px;font-weight:650}
+    .dealer-row button:disabled{opacity:.6;cursor:default}
+    /* Statusval står mellom namnet og Slett-knappen på kvar mekanikarrad. */
+    .mechanic-row{flex-wrap:wrap;align-items:center}
+    .mechanic-name{flex:1;min-width:135px;font-weight:650}
+    .mechanic-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
+    .mechanic-status{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:650;color:#344a63}
+    .mechanic-status select{font:inherit;min-height:38px;max-width:195px;padding:6px 27px 6px 9px;border:1px solid #bacce1;border-radius:7px;background:#fff;color:#162a46;cursor:pointer}
+    .mechanic-status select:focus{outline:2px solid #a5c6fb}
+    @media(max-width:520px){.mechanic-row{align-items:stretch}.mechanic-name{flex-basis:100%}.mechanic-controls{width:100%;justify-content:space-between;margin-left:0}.mechanic-status{flex:1}.mechanic-status select{min-width:0;width:100%}}
+    .dealer-confirm{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;background:#fff7f7;border:1px solid #e9b2b2;border-radius:0 0 9px 9px;margin-top:-1px}
+    .dealer-confirm span{flex:1;min-width:180px;font-size:14px;color:#842525;font-weight:600}
+    .dealer-confirm button{border:1px solid #c9d4e0;border-radius:8px;padding:9px 12px;min-height:39px;font-weight:700;cursor:pointer}
+    .dealer-confirm .dealer-yes{background:#b42323;color:#fff;border-color:#b42323}
+    .dealer-confirm .dealer-no{background:#fff;color:#24446b}
+    .dealer-empty{font-size:14px;color:#64748b;margin:0}
+    @media(max-width:440px){.dealer-add{flex-direction:column}.dealer-add button{width:100%}}
+    .blank{min-height:240px;border:1px dashed #c7d6e8;border-radius:14px;background:white;display:grid;place-items:center;text-align:center;color:#687c93;padding:24px}
+    footer{padding:25px;text-align:center;color:#70839b;font-size:12px}
+    @media(max-width:760px){.cols{grid-template-columns:1fr}.card{padding:19px}main{padding:24px 15px}.brand{font-size:18px}h1{font-size:25px}}
+    @media(max-width:480px){header{padding:12px 14px;gap:9px}.logo{width:42px;height:42px}.brand{font-size:15px;max-width:195px}.ver{display:none}.menu summary{width:43px;height:43px}}
+
+    /* Serviceføring under Mekanikarar */
+    .service-manager{margin-top:22px}
+    .service-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+    .service-wide{grid-column:1/-1}
+    .service-manager textarea{display:block;width:100%;min-height:100px;resize:vertical;border:1px solid #bacce1;border-radius:9px;background:#fff;color:#162a46;padding:11px 12px;font:inherit;font-size:16px}
+    .service-manager textarea:focus{outline:2px solid #a5c6fb;border-color:#235fc3}
+    .service-list{display:grid;gap:11px;margin-top:14px}
+    /* Servicehistorikk: maskin fyrst, deretter dei fire arbeidstypane. */
+    .service-machine-group{border:1px solid #bdccdf;border-radius:13px;overflow:hidden;background:#fff}
+    .service-machine-group > summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:19px 18px;background:#172b45;color:#fff}
+    .service-machine-group > summary::-webkit-details-marker{display:none}
+    .service-machine-group > summary:focus-visible{outline:3px solid #8ab6ff;outline-offset:-3px}
+    .service-machine-group[open] > summary{background:#0c1e32}
+    .service-machine-group[open] > summary .arrow{transform:rotate(90deg)}
+    .service-machine-name{display:block;font-size:19px;font-weight:780;overflow-wrap:anywhere}
+    .service-machine-count{display:block;font-size:13px;color:#cbd9e9;margin-top:3px}
+    .service-machine-types{display:grid;gap:10px;padding:13px;background:#f1f5fa}
+    .service-machine-group > summary .arrow{background:#fff;color:#172b45}
+    /* Fire opne/lukke-menyar under kvar maskin, ein for kvar type arbeid. */
+    .service-type-group{border:1px solid #c8d8eb;border-radius:12px;overflow:hidden;background:#fff}
+    .service-type-group > summary{list-style:none;cursor:pointer;padding:17px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#eaf0f8;color:#172d48}
+    .service-type-group > summary::-webkit-details-marker{display:none}
+    .service-type-group > summary:focus-visible{outline:3px solid #8ab6ff;outline-offset:-3px}
+    .service-type-group[open] > summary{border-bottom:1px solid #c8d8eb;background:#e4eefb}
+    .service-type-group[open] > summary .arrow{transform:rotate(90deg)}
+    .service-type-title{font-size:17px;font-weight:750;display:block}
+    .service-type-count{display:block;font-size:13px;color:#526981;font-weight:550;margin-top:3px}
+    .service-type-entries{display:grid;gap:10px;padding:13px;background:#f8faff}
+    .service-type-entries .empty{padding:16px}
+
+    /* Timetalet på maskina står under den siste arbeidsmenyen. */
+    .service-machine-hours{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+      padding:16px 18px;border:1px solid #a8c6e8;border-radius:12px;background:#e7f1ff;color:#183452}
+    .service-machine-hours-label{display:block;font-size:14px;font-weight:750}
+    .service-machine-hours-value{display:block;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.25}
+    .service-machine-hours-source{display:block;font-size:12px;color:#4b6684;margin-top:4px}
+    .service-machine-delete-area{display:grid;gap:9px;padding:14px 16px;border:1px solid #e8c5c5;border-radius:12px;background:#fffafa}
+    .service-machine-delete-area > .btn{justify-self:start}
+    .service-machine-delete-note{font-size:12px;color:#72565a;margin:0;line-height:1.5}
+    .service-machine-delete-area .confirm-box{border:1px solid #efd0d0;border-radius:9px}
+    .confirm-box[hidden]{display:none!important}
+    /* Tidlegare loggføringar ligg enkeltvis rett under arbeidstypen, ikkje i ei ekstra undermeny. */
+    .service-entry.is-archived{border-style:dashed;border-color:#b8c8d9;background:#f8fafc}
+    .service-entry.is-archived > summary{background:#f2f6fb}
+    .service-entry.is-archived .archive-tag{font-size:12px;color:#6b5872;font-weight:700}
+    .service-entry{border:1px solid #d4e0ef;border-radius:10px;overflow:hidden;background:#fff}
+    .service-entry.new{border:2px solid #238950;background:#f5fff8;box-shadow:0 0 0 3px #23895019}
+    #service-history-message{margin:12px 0 16px}
+    #service-feedback.bad{background:#fff0f0;border:1px solid #eab1b1;padding:12px;border-radius:9px}
+    #service-feedback.good:not(:empty){background:#e8f7ed;border:1px solid #b5e3c5;padding:12px;border-radius:9px}
+    .service-entry summary{list-style:none;cursor:pointer;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .service-entry summary::-webkit-details-marker{display:none}
+    .service-entry[open] .arrow{transform:rotate(90deg)}
+    .service-summary{display:flex;flex-direction:column;gap:5px;min-width:0;overflow-wrap:anywhere}
+    .service-summary strong{font-size:16px}
+    .service-summary small{font-size:13px;color:#64748b}
+    .service-body{background:#f9fbff;border-top:1px solid #dce5f0;padding:16px}
+    .service-body p{margin:0 0 10px;white-space:pre-wrap;overflow-wrap:anywhere}
+    .service-body p strong{display:inline-block;margin-right:5px}
+    .service-controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+    .service-history-panel{margin-top:14px;padding:16px;background:#fff;border:1px solid #b7cde5;border-radius:10px}
+    .service-history-panel h4{font-size:16px;margin:0 0 8px}
+    .service-history-panel .history-explanation{font-size:13px;color:#64748b;margin:0 0 14px}
+    .service-history-record{border:1px solid #d7e3f1;border-radius:9px;margin-top:9px;overflow:hidden;background:#f9fbff}
+    .service-history-record summary{padding:12px 14px;font-size:14px;font-weight:700;background:#edf3fc}
+    .service-history-record[open] summary{border-bottom:1px solid #d7e3f1}
+    .service-history-record .history-body{padding:13px 15px}
+    .service-history-record .history-body p{margin:0 0 8px;white-space:pre-wrap;overflow-wrap:anywhere}
+    .history-count{display:inline-block;font-size:12px;background:#e7efff;color:#174b8c;padding:3px 8px;border-radius:100px;font-weight:700}
+    .service-history-toggle[aria-expanded="true"]{background:#dceafd;border-color:#6b9cde}
+    .service-history-toggle:focus-visible{outline:3px solid #8ab6ff;outline-offset:2px}
+    .service-filter{margin-top:18px}
+    .service-filter label{display:block;font-size:14px;font-weight:650;margin-bottom:7px}
+    .service-filter input{width:100%;border:1px solid #bacce1;border-radius:9px;min-height:46px;padding:10px 12px;font-size:16px}
+    .service-section-title{margin:27px 0 12px;padding-top:20px;border-top:1px solid #d9e3f1}
+    .service-manager .notice{margin-top:14px}
+    /* Eigen kalender som fungerer utan nettlesaren sin showPicker-funksjon. */
+    .service-date-row{display:flex;align-items:stretch;gap:9px;flex-wrap:wrap}
+    .service-date-row input[type="date"]{flex:1 1 160px;min-width:0;width:auto;cursor:pointer}
+    .service-date-row .date-picker-button{flex:0 0 auto;min-height:46px;padding:10px 13px;white-space:nowrap}
+    .service-date-help{font-size:13px;color:#64748b;margin-top:7px}
+    .service-recorded-time{margin-top:14px;margin-bottom:0}
+    #service-recorded-time[readonly]{background:#f1f5f9;color:#173c70;font-weight:700;cursor:default;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+    .service-recorded-hint{font-size:12px;color:#64748b;margin-top:6px;line-height:1.45}
+    .service-calendar{margin-top:10px;max-width:380px;padding:14px;border:1px solid #b8cbe2;border-radius:12px;background:#fff;box-shadow:0 5px 18px #0b2c4a18}
+    .calendar-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;text-align:center}
+    .calendar-heading strong{font-size:16px;text-transform:capitalize}
+    .calendar-nav{border:1px solid #c7d5e8;border-radius:8px;background:#f1f5fb;color:#24446b;font-size:25px;line-height:1;width:42px;height:40px}
+    .calendar-weekdays,.calendar-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;text-align:center}
+    .calendar-weekdays{font-size:12px;font-weight:700;color:#64748b;margin-bottom:5px}
+    .calendar-weekdays span{padding:6px 0}
+    .calendar-days button{border:1px solid transparent;border-radius:8px;min-height:40px;background:#f5f8fc;color:#162a46;font-size:15px;font-weight:650;padding:5px 0}
+    .calendar-days button:hover{background:#e0ecff;border-color:#8cb5ef}
+    .calendar-days button.is-today{border-color:#7da7db}
+    .calendar-days button.is-selected{background:#245fc5;color:white;border-color:#245fc5}
+    .calendar-days button:focus-visible,.calendar-nav:focus-visible{outline:3px solid #8ab6ff;outline-offset:2px}
+    .calendar-days .calendar-blank{min-height:40px}
+    .calendar-footer{display:flex;justify-content:space-between;gap:8px;margin-top:13px}
+    .calendar-footer .btn{min-height:39px;padding:8px 13px}
+    @media(max-width:440px){.service-date-row .date-picker-button{width:100%}.service-calendar{max-width:100%;padding:10px}.calendar-days button{min-height:38px}}
+    @media(max-width:600px){.service-form-grid{grid-template-columns:1fr}.service-wide{grid-column:auto}}
+
+    /* Eiga oversikt over serviceintervall, heilt skild frå serviceføringsskjemaet. */
+    .interval-manager{margin-top:22px;max-width:760px}
+    .interval-row{gap:12px}
+    .interval-row .interval-label{flex:1;font-weight:700;min-width:110px}
+    .interval-row .interval-delete{flex:none}
+    .interval-row.is-current{background:#edf9f0;border-color:#8fcba5}
+    .interval-row .interval-select{flex:none;background:#eaf1ff;color:#184d9b;border:1px solid #aac3ed;border-radius:8px;padding:8px 12px;min-height:38px;font-weight:750}
+    .interval-row .interval-select.is-current{background:#207b47;border-color:#207b47;color:white;cursor:default}
+    .interval-row .interval-select:focus-visible{outline:3px solid #8ab6ff;outline-offset:2px}
+    .interval-current{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px solid #cbd7e8;border-radius:10px;padding:12px 14px;margin:16px 0;background:#f5f8fc;font-weight:700}
+    .interval-current.has-selection{background:#eaf8ef;border-color:#94d1a9;color:#17603b}
+    .interval-current button{border:1px solid #c5d2df;border-radius:8px;background:#fff;color:#294667;padding:7px 12px;font-weight:700;min-height:38px}
+    .interval-manager .dealer-add input{max-width:300px}
+    @media(max-width:440px){.interval-manager .dealer-add input{max-width:none}}
+    /* Neste service blir rekna ut frå timetal og det intervallet som gjeld no. */
+    #service-next-hours[readonly]{background:#f0f6ff;color:#173c70;font-weight:750;cursor:default}
+    #service-next-hours-hint{margin-top:6px}
+
+  
+    /* Synleg melding ved lagring, også når brukaren er langt nede på sida. */
+    .service-toast{position:fixed;bottom:20px;right:20px;z-index:1000;max-width:min(480px,calc(100vw - 40px));
+      padding:15px 18px;border-radius:12px;border:2px solid #b5e3c5;background:#e8f7ed;color:#17603b;
+      font-weight:750;box-shadow:0 8px 30px #0003;line-height:1.5}
+    .service-toast.bad{background:#fff0f0;border-color:#eab1b1;color:#9d2424}
+    .service-toast.good{background:#e8f7ed;border-color:#b5e3c5;color:#17603b}
+
+    /* Ansatte: tilsette grupperte i eigne stillingsmapper */
+    .employee-session{display:flex;align-items:center;gap:9px;margin-left:auto;min-width:0}
+    .employee-session[hidden]{display:none}
+    .employee-session span{font-size:13px;font-weight:700;max-width:195px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .employee-logout{border:1px solid #73859a;background:#182a3f;color:white;border-radius:8px;padding:9px 12px;white-space:nowrap;font-weight:700}
+    .employee-session:not([hidden]) + .menu{margin-left:0}
+    .auth-page{display:grid;place-items:center;min-height:calc(100vh - 200px)}
+    .auth-card{width:100%;max-width:480px;margin:18px auto}
+    .auth-card h1{font-size:25px;margin:0 0 14px}
+    .auth-symbol{font-size:32px;margin-bottom:13px}
+    .auth-full{width:100%;margin-top:10px}
+    .employee-warning{margin-bottom:18px}
+    .employee-admin-panel{display:grid;gap:18px}
+
+    .employee-form-card{max-width:850px}
+    .employee-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 17px}
+    .employee-role-guide{border:1px solid #c8d8eb;background:#f3f7ff;border-radius:11px;padding:13px 15px;margin:0 0 17px}
+    .employee-role-guide strong{display:block;font-size:14px;margin-bottom:10px;color:#173652}
+    .employee-role-guide-list{display:flex;flex-wrap:wrap;gap:8px}
+    .employee-role-guide-list span{border:1px solid #aac6e9;background:#fff;color:#184778;border-radius:8px;padding:7px 10px;font-weight:700;font-size:13px}
+    .employee-custom-role{margin-top:12px}
+    .employee-role-help{font-size:13px;line-height:1.45;margin:-6px 0 15px;color:#47617e}
+    .employee-role-help.warning-text{color:#8d5010;font-weight:650}
+    .employee-row.employee-newly-created{border:2px solid #238655;background:#eefbf3;box-shadow:0 0 0 3px rgba(35,134,85,.1)}
+    .employee-list-notice{border:1px solid #a5d8b5;background:#eaf8ee;color:#195e37;border-radius:10px;padding:12px 14px;margin:12px 0;font-weight:750;line-height:1.5}
+    .employee-list-notice[hidden]{display:none}
+    /* Sjå til at skjulte skjema verkeleg er skjulte, også når klassar har display:grid. */
+    [hidden]{display:none !important;}
+    .employee-list{display:grid;gap:12px}
+    .employee-role-folder{border:1px solid #cbd9eb;border-radius:13px;background:#f4f8ff;overflow:hidden;min-width:0}
+    .employee-role-folder > summary{display:flex;align-items:center;gap:12px;padding:16px;cursor:pointer;list-style:none;min-height:62px;user-select:none}
+    .employee-role-folder > summary::-webkit-details-marker{display:none}
+    .employee-role-folder > summary::before{content:'📁';font-size:22px;line-height:1}
+    .employee-role-folder[open] > summary::before{content:'📂'}
+    .employee-role-folder > summary::after{content:'⌄';font-size:23px;color:#526d8e;margin-left:5px;line-height:1;transition:transform .15s}
+    .employee-role-folder[open] > summary::after{transform:rotate(180deg)}
+    .employee-role-folder > summary:hover{background:#eaf2ff}
+    .employee-folder-title{font-size:16px;font-weight:800;color:#1a365b}
+    .employee-folder-count{margin-left:auto;font-size:13px;font-weight:800;color:#285082;background:#e0ebfb;border-radius:99px;padding:5px 10px;white-space:nowrap}
+    .employee-folder-content{display:grid;gap:11px;padding:0 13px 13px}
+    .employee-folder-content .employee-row{background:#fff}
+    .employee-folder-empty{padding:15px;border:1px dashed #c7d7ea;border-radius:9px;background:#fff;color:#61738b;font-size:14px}
+    .employee-row{border:1px solid #d2deec;border-radius:12px;background:#f8fbff;padding:17px;min-width:0}
+    .employee-row-top{display:flex;align-items:start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .employee-row strong{font-size:17px;overflow-wrap:anywhere}
+    .employee-row p{margin:7px 0;overflow-wrap:anywhere;font-size:14px;color:#415571}
+
+
+    /* Gjenopprettingskode: berre tilgjengeleg for innlogga administrator */
+    #employee-recovery-panel{margin-top:17px;max-width:none}
+    #employee-recovery-panel[hidden]{display:none !important}
+    #employee-recovery-details>summary{cursor:pointer;font-weight:800;font-size:17px;list-style:none;padding:4px 0;color:#173652}
+    #employee-recovery-details>summary::-webkit-details-marker{display:none}
+    #employee-recovery-details>summary::before{content:'▸';display:inline-block;margin-right:10px;transition:transform .15s}
+    #employee-recovery-details[open]>summary::before{transform:rotate(90deg)}
+    .employee-recovery-inner{border-top:1px solid #cfdeee;margin-top:16px;padding-top:17px}
+    .employee-recovery-inner .field{max-width:370px}
+    .employee-recovery-code{border:1px solid #a0d6b2;background:#eaf8ee;border-radius:11px;padding:15px 17px;margin-top:18px}
+    .employee-recovery-code code{display:block;font-size:clamp(20px,4vw,31px);font-weight:850;letter-spacing:3px;overflow-wrap:anywhere;color:#165c39;margin:9px 0 13px}
+    .employee-recovery-code .actions{margin-top:8px}
+
+    /* Registrerte tilsette: stilling -> person -> opplysningar, som maskin -> arbeidstype i Servicehistorikk. */
+    #employee-list-card{margin-top:8px;scroll-margin-top:86px;outline:2px solid transparent;transition:outline-color .25s}
+    #employee-list-card.employee-list-updated{outline-color:#37a267}
+    #employee-list-card .listhead h2{font-size:23px}
+    .employee-person-entry{scroll-margin-top:105px;outline-offset:5px}
+    .employee-newly-created > summary{box-shadow:inset 5px 0 0 #228a52;}
+    .employee-role-folder{background:#f0f4fa;border-color:#b9cce2}
+    .employee-role-folder > summary{background:#172b45;color:#fff}
+    .employee-role-folder > summary:hover,.employee-role-folder[open] > summary{background:#10243d}
+    .employee-role-folder > summary:focus-visible,.employee-person-entry > summary:focus-visible{outline:3px solid #8ab6ff;outline-offset:-3px}
+    .employee-role-folder > summary::after{color:#fff}
+    .employee-folder-title{color:#fff}
+    .employee-folder-count{color:#183451;background:#e8f0fa}
+    .employee-folder-content{padding:13px;gap:10px}
+    .employee-person-entry{padding:0;overflow:hidden;background:#fff}
+    .employee-folder-content .employee-person-entry:first-child{border-left:4px solid #295e9e}
+    .employee-person-summary{display:flex;align-items:center;gap:10px;padding:15px 16px;list-style:none;cursor:pointer;min-height:65px;background:#eaf0f8}
+    .employee-person-summary::-webkit-details-marker{display:none}
+    .employee-person-entry[open] > .employee-person-summary{background:#e0ebf8;border-bottom:1px solid #d2deec}
+    .employee-person-summary:hover{background:#dce8f7}
+    .employee-person-summary-text{display:grid;gap:3px;flex:1;min-width:0}
+    .employee-person-summary-text strong{font-size:16px;color:#1a365b}
+    .employee-person-summary-email{font-size:12px;color:#536b89;overflow-wrap:anywhere}
+    .employee-person-summary-status{font-size:12px;font-weight:750;color:#855a08;background:#fff2d4;padding:5px 8px;border-radius:8px;white-space:nowrap}
+    .employee-person-summary-status.confirmed{color:#17603b;background:#e6f6eb}
+    .employee-person-chevron{color:#345579;font-size:19px;transition:transform .15s}
+    .employee-person-entry[open] .employee-person-chevron{transform:rotate(90deg)}
+    .employee-person-body{padding:15px 16px 16px}
+    @media(max-width:560px){.employee-person-summary{flex-wrap:wrap}.employee-person-summary-status{order:3}.employee-person-chevron{margin-left:auto}}
+    .employee-role-tag{display:inline-block;padding:5px 9px;background:#eaf1ff;border-radius:99px;color:#234b82;font-size:12px;font-weight:800}
+    .employee-status{display:inline-block;font-size:13px;font-weight:750;padding:5px 9px;border-radius:8px;background:#fff2d4;color:#805300;margin-top:6px}
+    .employee-status.confirmed{background:#e6f6eb;color:#17603b}
+    .employee-row .actions{margin-top:13px;align-items:center}
+    .employee-row .actions .btn{min-height:38px;padding:9px 12px;font-size:13px}
+    .employee-invite{margin-top:12px;padding:13px;background:#fff;border:1px solid #d4e1ee;border-radius:9px}
+    .employee-invite p{margin:0 0 9px}
+    .employee-invite code{font-size:17px;font-weight:800;letter-spacing:.12em;color:#162a46}
+    .employee-invite a.btn{display:inline-flex;align-items:center;text-decoration:none;justify-content:center}
+
+    .employee-pin-details{border:1px solid #d1dfea;border-radius:9px;padding:12px;margin-top:13px}
+    .employee-pin-details summary{cursor:pointer;font-weight:700}
+    .employee-pin-form{max-width:400px;margin-top:15px}
+    .employee-row .employee-inline{margin-top:12px;padding:13px;border:1px solid #d7e2ef;background:#fff;border-radius:9px}
+    .employee-inline label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+    .employee-inline input{width:100%;max-width:260px;min-height:43px;padding:10px;border:1px solid #bacce1;border-radius:8px}
+    .employee-inline .actions{margin-top:10px}
+    .employee-confirm-delete{background:#fff0f0;border:1px solid #e9b2b2;padding:12px;border-radius:9px;margin-top:12px}
+    .employee-confirm-delete p{color:#8a2424}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    @media(max-width:620px){.employee-fields{grid-template-columns:1fr}.employee-session span{max-width:80px;font-size:11px}.employee-logout{padding:8px;font-size:12px}.employee-row{padding:13px}}
+    @media(max-width:430px){.employee-session span{display:none}.employee-session{gap:4px}.employee-logout{font-size:11px}.employee-row .actions{gap:6px}}
+
+    /* Vis tydeleg at kopieringa faktisk lukkast, og ikkje berre at knappen vart trykt. */
+    .btn.copy-success,.btn.secondary.copy-success{background:#168245!important;color:#fff!important;border-color:#13723b!important;box-shadow:0 0 0 2px #b4e6ca}
+    .btn.copy-success:hover,.btn.secondary.copy-success:hover{background:#116d39!important;border-color:#116d39!important}
+    .fault-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:11px;margin:16px 0 18px}
+    .fault-metric{border:1px solid #c9d9ea;border-radius:11px;padding:13px 15px;background:#f5f9ff;min-width:0}
+    .fault-metric strong{display:block;font-size:27px;line-height:1.25;font-variant-numeric:tabular-nums;color:#173c70}
+    .fault-metric span{display:block;font-size:13px;line-height:1.4;color:#4c6079;font-weight:700;margin-top:5px}
+    .fault-metric.attention{background:#fff8e9;border-color:#efd5a1}
+    .fault-metric.attention strong{color:#885003}
+    .fault-metric.finished{background:#ecf9f0;border-color:#b8dfc4}
+    .fault-metric.finished strong{color:#16663e}
+    .fault-overview-intro{margin:0 0 9px;color:#4c6079}
+    /* Feilmeldingar: eit skjema under Rapporter, og rullegardinmapper under Serviceintervall. */
+    .report-form-card{max-width:850px}
+    .fault-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+    .fault-span{grid-column:1/-1}
+    .report-form-card textarea{display:block;width:100%;min-height:145px;resize:vertical;border:1px solid #bacce1;border-radius:9px;background:#fff;color:#162a46;padding:12px;font:inherit;font-size:16px}
+    .report-form-card textarea:focus{outline:2px solid #a5c6fb;border-color:#235fc3}
+    .fault-field-hint{font-size:12px;color:#637891;margin:6px 0 0}
+    .fault-creator-note{font-size:14px;margin:2px 0 18px;color:#42556b}
+    .fault-board{margin-top:22px}
+    .fault-search{margin:14px 0 17px}
+    .fault-search label{display:block;font-weight:750;font-size:14px;margin-bottom:7px;color:#173150}
+    .fault-search-row{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
+    .fault-search input[type="search"]{display:block;flex:1 1 230px;width:100%;min-width:0;padding:12px 14px;border:1px solid #adc4dc;border-radius:9px;background:#fff;color:#162a46;font:inherit;font-size:16px}
+    .fault-search input[type="search"]:focus{outline:2px solid #a5c6fb;border-color:#235fc3}
+    .fault-search-row .btn{flex:none}
+    .fault-search-hint{color:#526981;font-size:13px;margin:7px 0 0}
+    .fault-board-list{display:grid;gap:12px}
+    .fault-machine-group{border:1px solid #bccddd;border-radius:12px;overflow:hidden;background:white}
+    .fault-machine-group > summary{list-style:none;cursor:pointer;background:#172b45;color:#fff;padding:17px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px}
+    .fault-machine-group > summary::-webkit-details-marker{display:none}
+    .fault-machine-group > summary:focus-visible,.fault-entry > summary:focus-visible{outline:3px solid #79abef;outline-offset:-3px}
+    .fault-machine-group[open] > summary{background:#0c1e32}
+    .fault-machine-group[open] > summary .arrow{transform:rotate(90deg)}
+    .fault-machine-title{font-size:18px;font-weight:800;display:block;overflow-wrap:anywhere}
+    .fault-machine-count{font-size:13px;color:#d2e2f2;display:block;margin-top:4px}
+    .fault-machine-inner{display:grid;gap:10px;background:#f3f7fc;padding:13px}
+    .fault-entry{border:1px solid #cedbea;border-radius:10px;overflow:hidden;background:#fff}
+    .fault-entry > summary{list-style:none;cursor:pointer;padding:15px;display:flex;align-items:center;justify-content:space-between;gap:9px}
+    .fault-entry > summary::-webkit-details-marker{display:none}
+    .fault-entry[open] > summary .arrow{transform:rotate(90deg)}
+    .fault-summary-main{display:flex;flex-direction:column;gap:5px;min-width:0}
+    .fault-summary-main strong{font-size:16px;overflow-wrap:anywhere}
+    .fault-summary-main small{color:#64748b;font-size:13px;overflow-wrap:anywhere}
+    .fault-badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .fault-badge{display:inline-block;border-radius:999px;padding:4px 9px;font-size:12px;font-weight:750;white-space:nowrap;background:#e9f1ff;color:#1d528d}
+    .fault-badge.open{background:#fff1d3;color:#8d5300}
+    /* Fem tydelege statusar for feilmeldingar. */
+    .fault-badge.fixed,.fault-badge.finished{background:#e4f7ed;color:#136138}
+    .fault-badge.processing{background:#e6efff;color:#2458a4}
+    .fault-badge.queued{background:#fff0d8;color:#95560c}
+    .fault-badge.workshop{background:#eee6ff;color:#63369e}
+    .fault-badge.urgent{background:#ffebeb;color:#ab2525}
+    .fault-details{border-top:1px solid #dce5ef;background:#fcfdff;padding:15px}
+    .fault-details p{margin:0 0 9px;white-space:pre-wrap;overflow-wrap:anywhere}
+    .fault-details p strong{margin-right:5px}
+    .fault-controls{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;margin-top:15px}
+    .fault-controls .btn{min-height:40px;padding:9px 12px;font-size:14px}
+    .fault-status-field{display:flex;flex-direction:column;gap:7px;flex:1 1 100%;max-width:390px;padding:12px 14px;border:1px solid #cbd9e8;background:#f1f6fc;border-radius:10px}
+    .fault-status-field label{font-weight:800;font-size:14px;color:#1a3554}
+    .fault-status-select{min-height:44px;width:100%;padding:9px 12px;font:inherit;font-weight:700;color:#173653;border:1px solid #a9bfdc;background:white;border-radius:8px;cursor:pointer}
+    .fault-status-select:focus-visible{outline:3px solid #82b7ff;outline-offset:2px}
+    .fault-status-select:disabled{opacity:.75;cursor:default}
+    .fault-status-hint{font-size:12px;color:#60738a}
+    .fault-confirm{padding:12px;border:1px solid #edc5c5;background:#fff6f6;border-radius:9px;margin-top:12px}
+    .fault-confirm p{margin:0 0 11px;color:#912b2b}
+    .fault-board #fault-board-feedback{margin:0 0 16px}
+    @media(max-width:600px){.fault-form-grid{grid-template-columns:1fr}.fault-span{grid-column:auto}.fault-entry > summary{align-items:flex-start}.fault-badges{justify-content:flex-start}}
+
+    /* v66: dei mest brukte stillingane er tydelege før heile stillingskatalogen. */
+    .employee-role-guide-list span:nth-child(-n+4){font-weight:750}
+    #employee-role, #setup-role {min-height:46px}
+    /* Gøym sperra sider også når eit tidlegare CSS-val set display. */
+    [data-page][hidden]{display:none !important}
+</style>
+</head>
+<body class="auth-required cloud-locked">
+<section id="cloud-gate" aria-label="Felles innlogging">
+ <div class="cloud-card"><h1>Engelsen Anlegg ServiceLogg</h1>
+ <p id="cloud-message" role="status">Koplar til felles innlogging …</p>
+ <form id="cloud-login" hidden><label for="cloud-email">E-post</label><input id="cloud-email" type="email" autocomplete="username" required>
+ <label for="cloud-pin">PIN (8 siffer)</label><input id="cloud-pin" type="password" inputmode="numeric" pattern="[0-9]{8}" minlength="8" maxlength="8" autocomplete="current-password" required>
+ <button id="cloud-login-btn" type="submit">Logg inn</button></form>
+ <form id="cloud-confirm" hidden><p>Skriv inn den sekssifra stadfestingskoden du har fått privat av administrator.</p>
+ <label for="cloud-code">Stadfestingskode</label><input id="cloud-code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required>
+ <button id="cloud-confirm-btn" type="submit">Stadfest og opna ServiceLogg</button><button id="cloud-confirm-logout" type="button" style="background:#657a94">Logg ut</button></form>
+ </div></section>
+<div id="cloud-status" hidden aria-live="polite"><span id="cloud-status-message">Felles database</span><button type="button" id="cloud-refresh">Oppdater data</button><button type="button" id="cloud-export">Sikkerheitskopi</button><button type="button" id="cloud-import" hidden>Importer gamle data</button></div>
+<header>
+  <span class="logo"><img src="data:image/png;base64,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" alt="Engelsen Anlegg-logo"></span><span class="brand">Engelsen Anlegg service logg</span><span class="ver">v74</span><div id="employee-session" class="employee-session" hidden><span id="employee-session-name"></span><button type="button" id="employee-logout" class="employee-logout">Logg ut</button></div>
+  <details class="menu" id="menu"><summary aria-label="Opna meny">☰</summary>
+    <nav aria-label="Hovudmeny">
+      <a href="#oversikt" data-page="oversikt">▦ &nbsp; Oversikt</a>
+      <a href="#maskinregisteret" data-page="maskinregisteret">🚜 &nbsp; Maskinregisteret</a>
+      <a href="#servicebok" data-page="servicebok">📖 &nbsp; Service bok</a>
+      <a href="#rapporter" data-page="rapporter">📝 &nbsp; Rapporter</a>
+      <a href="#ansatte" data-page="ansatte">👥 &nbsp; Ansatte</a>
+    </nav>
+  </details>
+</header>
+<main>
+  <div id="not-running" class="notice warning" role="alert"><strong>Appen er ikkje aktiv.</strong> Dersom denne meldinga ikkje forsvinn, opnar du truleg fila i ei førehandsvising. Last ned fila og opna henne med Chrome eller Edge.</div>
+  <div id="employee-access-warning" class="notice warning" role="alert" hidden></div>
+  <section id="employee-auth" class="auth-page">
+    <div id="auth-setup" class="card auth-card" hidden>
+      <div class="auth-symbol">👤</div>
+      <h1>Opprett den første brukaren</h1>
+      <p class="dealer-help">Det er ikkje registrert nokon tilsette i denne nettlesaren. Opprett den første kontoen før ServiceLogg kan brukast.</p>
+      <div class="notice warning"><strong>Før publisering:</strong> Dette er berre lokal innlogging i denne nettlesaren. GitHub Pages deler ikkje kontoar eller PIN-kodar mellom PC-ar. For felles og trygg innlogging trengst ein database og ei innloggingsteneste. Ikkje bruk denne versjonen til å lagra sensitive opplysningar på ei offentleg nettside.</div>
+      <form id="auth-setup-form">
+        <div class="field"><label for="setup-name">Namn</label><input id="setup-name" type="text" maxlength="120" autocomplete="name" required placeholder="Fornamn Etternamn"></div>
+        <div class="field"><label for="setup-email">E-postadresse</label><input id="setup-email" type="email" maxlength="254" autocomplete="email" required placeholder="namn@firma.no"></div>
+        <div class="field"><label for="setup-role">Stilling / rolle</label><select id="setup-role" required></select><div id="setup-custom-role-field" class="employee-custom-role" hidden><input id="setup-custom-role" type="text" maxlength="80" placeholder="Skriv inn stilling" autocomplete="off"></div></div>
+        <div class="field"><label for="setup-pin">Vel PIN (4–8 siffer)</label><input id="setup-pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="new-password" required placeholder="4–8 siffer"></div>
+        <button type="submit" id="auth-setup-button" class="btn primary auth-full">Opprett brukar og logg inn</button>
+        <p id="auth-setup-feedback" class="feedback" role="status" aria-live="polite"></p>
+      </form>
+    </div>
+    <div id="auth-login" class="card auth-card">
+      <div class="auth-symbol">🔐</div>
+      <h1>Logg inn i ServiceLogg</h1>
+      <p class="dealer-help">Skriv inn e-postadressa og PIN-koden du har fått registrert under Ansatte.</p>
+      <form id="auth-login-form">
+        <div class="field"><label for="auth-email">E-postadresse</label><input id="auth-email" type="email" autocomplete="username" required placeholder="namn@firma.no"></div>
+        <div class="field"><label for="auth-pin">PIN-kode</label><input id="auth-pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="current-password" required placeholder="4–8 siffer"></div>
+        <button type="submit" id="auth-login-button" class="btn primary auth-full">Logg inn</button>
+        <p id="auth-feedback" class="feedback" role="status" aria-live="polite"></p>
+      </form>
+      <details class="employee-pin-details" id="auth-recovery-details"><summary>Gløymt PIN? (gjenopprettingskode)</summary>
+        <form id="auth-recovery-form" class="employee-pin-form">
+          <p class="dealer-help">Den første registrerte brukaren får ein gjenopprettingskode, uansett stilling. Du må ha teke vare på koden for å nullstilla PIN.</p>
+          <div class="field"><label for="auth-recovery-email">E-postadresse</label><input id="auth-recovery-email" type="email" required autocomplete="username"></div>
+          <div class="field"><label for="auth-recovery-code">Gjenopprettingskode (12 siffer)</label><input id="auth-recovery-code" type="text" inputmode="numeric" maxlength="12" pattern="[0-9]{12}" required></div>
+          <div class="field"><label for="auth-recovery-pin">Ny PIN (4–8 siffer)</label><input id="auth-recovery-pin" type="password" inputmode="numeric" minlength="4" maxlength="8" required autocomplete="new-password"></div>
+          <button type="submit" class="btn primary">Nullstill PIN</button>
+          <p id="auth-recovery-feedback" class="feedback" role="status" aria-live="polite"></p>
+        </form>
+      </details>
+      <p class="note">Alle må logga inn på nytt kvar gong dei opnar appen. Tilsette og PIN blir berre kontrollerte lokalt i denne nettlesaren. På GitHub Pages krev sikker felles innlogging ein server og ein database.</p>
+    </div>
+    <div id="auth-confirm" class="card auth-card" hidden>
+      <div class="auth-symbol">✉️</div>
+      <h1>Bekreft stillinga di</h1>
+      <p id="auth-pending-text" class="dealer-help"></p>
+      <p class="notice warning">Få den sekssifra stadfestingskoden frå administratoren som registrerte deg. Skriv koden inn her for å stadfesta stillinga og opna appen.</p>
+      <form id="auth-confirm-form">
+        <div class="field"><label for="auth-confirm-code">Stadfestingskode (6 siffer)</label><input id="auth-confirm-code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code" placeholder="6 siffer"></div>
+        <button type="submit" class="btn primary auth-full">Bekreft stilling og opna ServiceLogg</button>
+        <p id="auth-confirm-feedback" class="feedback" role="status" aria-live="polite"></p>
+      </form>
+      <button type="button" id="auth-signout" class="btn secondary auth-full">Logg ut / Byt brukar</button>
+    </div>
+  </section>
+  <section id="oversikt" class="page" hidden>
+    <h1>Oversikt</h1>
+    <section class="card" aria-labelledby="overview-fault-title">
+      <h2 id="overview-fault-title">Oversikt over feilmeldingar</h2>
+      <p class="fault-overview-intro">Talet på alle registrerte feilmeldingar, uavhengig av kva maskin dei høyrer til.</p>
+      <div class="fault-metrics" aria-live="polite">
+        <div class="fault-metric"><strong id="overview-fault-total">0</strong><span>Totalt registrerte</span></div>
+        <div class="fault-metric attention"><strong id="overview-fault-pending">0</strong><span>Ikkje ferdige</span></div>
+        <div class="fault-metric finished"><strong id="overview-fault-finished">0</strong><span>Ferdige</span></div>
+        <div class="fault-metric"><strong id="overview-fault-machines">0</strong><span>Maskinar med feilmeldingar</span></div>
+      </div>
+      <p class="dealer-help">Statusoversikt:</p>
+      <div class="fault-metrics" aria-live="polite">
+        <div class="fault-metric"><strong id="overview-fault-open">0</strong><span>Open</span></div>
+        <div class="fault-metric"><strong id="overview-fault-processing">0</strong><span>Under behandling</span></div>
+        <div class="fault-metric"><strong id="overview-fault-queued">0</strong><span>I ventekø til verkstad</span></div>
+        <div class="fault-metric"><strong id="overview-fault-workshop">0</strong><span>Inne på verkstad</span></div>
+      </div>
+      <p><a href="#servicebok" data-page="servicebok" class="btn secondary">Sjå feilmeldingane i Service bok</a></p>
+    </section>
+  </section>
+  <section id="maskinregisteret" class="page" hidden>
+    <h1>Maskinregisteret</h1>
+    <div class="cols">
+      <section class="card" id="form-card">
+        <h2 id="form-title">Registrer maskin</h2>
+        <div class="notice ok" id="ready" hidden>✓ Appen er klar. Trykk «Legg til maskin» for å få maskina inn i lista.</div>
+        <div id="machine-form">
+          <div class="field"><label for="name">Namn på maskin <span class="optional">(valfritt)</span></label><input id="name" type="text" maxlength="100" placeholder="Til dømes Gravemaskin 1"></div>
+          <div class="field"><label for="brand">Merke</label><input id="brand" type="text" maxlength="80" placeholder="Til dømes Volvo"></div>
+          <div class="field"><label for="model">Modell</label><input id="model" type="text" maxlength="80" placeholder="Til dømes EC220"></div>
+          <div class="field"><label for="hours">Timetal</label><input id="hours" type="text" inputmode="decimal" placeholder="Til dømes 2450"><div class="note" style="margin-top:6px">Talet blir automatisk oppdatert når nokon registrerer høgare timetal i serviceboka eller på ei feilmelding.</div></div>
+          <div class="field"><label for="by">Registrert av</label><input id="by" type="text" maxlength="100" placeholder="Namn på personen"></div>
+          <div class="field"><label for="dealer">Forhandlar</label>
+            <select id="dealer"><option value="">Vel forhandlar (valfritt)</option></select>
+            <div class="note" style="margin-top:6px">Du kan leggja til forhandlarar under «Registrerte maskinar».</div>
+          </div>
+          <div class="field"><label for="machineFor">Maskin til</label><input id="machineFor" type="text" maxlength="120" placeholder="Til dømes namn på eigar eller firma"></div>
+          <div class="actions"><button type="button" id="save" class="btn primary">+ Legg til maskin</button><button type="button" id="cancel" class="btn secondary" hidden>Avbryt</button></div>
+          <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+      <section class="card" id="registered">
+        <div class="listhead"><h2>Registrerte maskinar</h2><span id="count" class="count">0 maskinar</span></div>
+        <div id="saved-message" class="notice ok" hidden></div>
+        <div id="items" class="items"><div class="empty">Ingen maskinar registrerte enno.</div></div>
+        <section class="dealer-manager" aria-labelledby="dealer-title">
+          <h3 id="dealer-title">Forhandlarar</h3>
+          <p class="dealer-help">Skriv inn forhandlarane de brukar. Då kan du velja dei frå rullegardinmenyen når du registrerer ei maskin.</p>
+          <label for="new-dealer" class="field" style="display:block;font-weight:650;font-size:14px;margin-bottom:7px">Namn på forhandlar</label>
+          <div class="dealer-add">
+            <input id="new-dealer" type="text" maxlength="120" placeholder="Til dømes Nasta AS" autocomplete="organization">
+            <button type="button" id="add-dealer" class="btn primary">+ Legg til</button>
+          </div>
+          <p id="dealer-feedback" class="feedback" role="status" aria-live="polite"></p>
+          <div id="dealer-list" class="dealer-list"></div>
+        </section>
+      </section>
+    </div>
+    <p class="note">Maskinane og forhandlarlista blir lagra i nettlesaren på denne PC-en. Dei blir ikkje delte med andre brukarar før appen får ein felles database.</p>
+  </section>
+  <section id="servicebok" class="page" hidden>
+    <h1>Service bok</h1>
+    <section class="card mechanic-manager" aria-labelledby="mechanic-title">
+      <div class="listhead"><h2 id="mechanic-title">Mekanikarar</h2><span id="mechanic-count" class="count">0 mekanikarar</span></div>
+      <p class="dealer-help">Legg inn namna på mekanikarane og vel status for kvar enkelt: Inne mekaniker, Ute mekaniker eller Ute/Inne mekaniker.</p>
+      <label for="new-mechanic" class="field" style="display:block;font-weight:650;font-size:14px;margin-bottom:7px">Namn på mekanikar</label>
+      <div class="dealer-add">
+        <input id="new-mechanic" type="text" maxlength="120" placeholder="Skriv inn namnet på mekanikaren" autocomplete="name">
+        <button type="button" id="add-mechanic" class="btn primary">+ Legg til mekanikar</button>
+      </div>
+      <p id="mechanic-feedback" class="feedback" role="status" aria-live="polite"></p>
+      <div id="mechanic-list" class="dealer-list"></div>
+    </section>
+
+    <section class="card service-manager" id="service-manager" aria-labelledby="service-title">
+      <div class="listhead"><h2 id="service-title">Service</h2><span id="service-count" class="count">0 serviceføringar</span></div>
+      <p class="dealer-help">Her kan du loggføra service, reparasjonar og vedlikehald. Maskin og mekanikar blir henta frå listene dine. Kvar maskin har separate loggar for Service, Reparasjon, Vedlikehald og Kontroll / inspeksjon. Ei ny reparasjonsføring kan berre erstatta ein tidlegare reparasjon, aldri ein service.</p>
+      <h3 id="service-form-title">Registrer service</h3>
+      <form id="service-form" novalidate>
+        <div class="service-form-grid">
+          <div class="field service-date-field"><label for="service-date">Dato *</label>
+            <div class="service-date-row"><input type="date" id="service-date" required aria-describedby="service-date-help"><button type="button" id="service-date-open" class="btn secondary date-picker-button" aria-label="Opna kalender og vel servicedato" aria-expanded="false" aria-controls="service-calendar">📅 Vel dato</button></div>
+            <div id="service-calendar" class="service-calendar" role="group" aria-label="Vel servicedato i kalenderen" hidden>
+              <div class="calendar-heading"><button type="button" class="calendar-nav" id="service-calendar-prev" aria-label="Førre månad">‹</button><strong id="service-calendar-month" aria-live="polite"></strong><button type="button" class="calendar-nav" id="service-calendar-next" aria-label="Neste månad">›</button></div>
+              <div class="calendar-weekdays" aria-hidden="true"><span>Mån</span><span>Tys</span><span>Ons</span><span>Tor</span><span>Fre</span><span>Lau</span><span>Sun</span></div>
+              <div id="service-calendar-days" class="calendar-days"></div>
+              <div class="calendar-footer"><button type="button" id="service-calendar-today" class="btn secondary">I dag</button><button type="button" id="service-calendar-close" class="btn secondary">Lukk</button></div>
+            </div>
+            <div class="service-date-help" id="service-date-help" aria-live="polite">Trykk «Vel dato» for å velja dato i kalenderen.</div>
+            <div class="field service-recorded-time"><label for="service-recorded-time">Tidspunkt ført (automatisk)</label><input id="service-recorded-time" type="text" readonly aria-describedby="service-recorded-hint"><div id="service-recorded-hint" class="service-recorded-hint">Klokka går automatisk og oppdaterer seg kvart sekund. Tidspunktet blir lagra når du trykkjer «Lagre service».</div></div>
+          </div>
+          <div class="field"><label for="service-type">Type arbeid</label><select id="service-type"><option value="Service">Service</option><option value="Reparasjon">Reparasjon</option><option value="Vedlikehald">Vedlikehald</option><option value="Kontroll / inspeksjon">Kontroll / inspeksjon</option></select></div>
+          <div class="field"><label for="service-machine">Maskin *</label><select id="service-machine" required><option value="">Vel maskin frå Maskinregisteret</option></select><div id="service-machine-hint" class="note" style="margin-top:6px">Maskinane blir henta automatisk frå Maskinregisteret.</div></div>
+          <div class="field"><label for="service-mechanic">Mekanikar</label><select id="service-mechanic"><option value="">Vel mekanikar frå lista ovanfor</option></select><div id="service-mechanic-hint" class="note" style="margin-top:6px">Mekanikarane blir henta automatisk frå mekanikarlista lenger oppe.</div></div>
+          <div class="field"><label id="service-hours-label" for="service-hours">Timetal ved service</label><input id="service-hours" type="text" inputmode="decimal" placeholder="Til dømes 2500"></div>
+          <div class="field" id="service-next-hours-field"><label for="service-next-hours">Neste service ved timetal (automatisk)</label><input id="service-next-hours" type="text" inputmode="decimal" readonly aria-describedby="service-next-hours-hint" placeholder="Blir rekna ut automatisk"><div id="service-next-hours-hint" class="note" style="margin-top:6px" aria-live="polite">Vel eit gjeldande serviceintervall under Serviceintervall, og skriv inn timetal ved service.</div></div>
+          <div class="field"><label for="service-cost">Kostnad i kr <span class="optional">(valfritt)</span></label><input id="service-cost" type="text" inputmode="decimal" placeholder="Til dømes 2500"></div>
+          <div class="field service-wide"><label for="service-work">Arbeid som er utført <span class="optional">(valfritt)</span></label><textarea id="service-work" maxlength="6000" placeholder="Skriv kva som vart gjort på maskina"></textarea></div>
+          <div class="field service-wide"><label for="service-notes">Merknader</label><textarea id="service-notes" maxlength="4000" placeholder="Andre opplysningar om servicen"></textarea></div>
+        </div>
+        <div class="actions"><button class="btn primary" id="service-save" type="button">+ Lagre service</button><button class="btn secondary" id="service-cancel" type="button" hidden>Avbryt redigering</button></div>
+        <p class="feedback" id="service-feedback" role="status" aria-live="polite"></p>
+        <div id="service-script-warning" class="notice warning" role="alert">Dersom «Lagre service» ikkje reagerer, last ned HTML-fila og opna henne i Chrome eller Edge på PC-en (ikkje i førehandsvisinga).</div>
+      </form>
+      <div id="service-toast" class="service-toast" role="status" aria-live="assertive" hidden></div>
+      <h3 class="service-section-title" id="service-history-title">Servicehistorikk</h3>
+      <p class="dealer-help">Opna maskina (til dømes CAT 313), vel arbeidstype og opna loggføringa. Kvar maskin har eigne menyar for Service, Reparasjon, Vedlikehald og Kontroll / inspeksjon. Nedst, under dei fire menyane, står timetalet som sist vart registrert på maskina, uansett arbeidstype.</p>
+      <div id="service-history-message" class="notice ok" role="status" aria-live="polite" hidden></div>
+      <div class="service-filter"><label for="service-search">Søk i servicehistorikken</label><input id="service-search" type="search" placeholder="Søk etter maskin, mekanikar eller arbeid"></div>
+      <div id="service-list" class="service-list"><div class="empty">Ingen service registrert enno.</div></div>
+    </section>
+
+    <section class="card interval-manager" id="service-interval-manager" aria-labelledby="interval-title">
+      <div class="listhead"><h2 id="interval-title">Serviceintervall</h2><span id="interval-count" class="count">0 intervall</span></div>
+      <p class="dealer-help">Legg inn dei timeintervalla de brukar, til dømes 250, 500 eller 1000 timar. Trykk «Vel» på intervallet som skal gjelda. Det blir brukt til å rekna ut «Neste service ved timetal» automatisk i skjemaet ovanfor.</p>
+      <div id="interval-current" class="interval-current" aria-live="polite"><span id="interval-current-text">Ingen serviceintervall valt enno.</span><button type="button" id="interval-clear" hidden>Fjern val</button></div>
+      <label for="interval-hours" class="field" style="display:block;font-weight:650;font-size:14px;margin-bottom:7px">Serviceintervall i timar</label>
+      <div class="dealer-add">
+        <input id="interval-hours" type="number" inputmode="numeric" min="1" max="1000000" step="1" placeholder="Til dømes 500" aria-describedby="interval-help">
+        <button type="button" id="interval-add" class="btn primary">+ Legg til intervall</button>
+      </div>
+      <p id="interval-help" class="note" style="margin-top:9px">Skriv berre timetalet, til dømes 500.</p>
+      <p id="interval-feedback" class="feedback" role="status" aria-live="polite"></p>
+      <div id="interval-list" class="dealer-list"><p class="dealer-empty">Ingen serviceintervall lagde til enno.</p></div>
+    </section>
+    <section class="card fault-board" id="fault-board" aria-labelledby="fault-board-title">
+      <div class="listhead"><h2 id="fault-board-title">Feilmeldingar</h2><span id="fault-board-count" class="count">0 feilmeldingar</span></div>
+      <div class="fault-metrics" aria-label="Tal på registrerte feilmeldingar" aria-live="polite">
+        <div class="fault-metric"><strong id="fault-stats-total">0</strong><span>Totalt registrerte feilmeldingar</span></div>
+        <div class="fault-metric attention"><strong id="fault-stats-pending">0</strong><span>Ikkje ferdige</span></div>
+        <div class="fault-metric finished"><strong id="fault-stats-finished">0</strong><span>Ferdige</span></div>
+        <div class="fault-metric"><strong id="fault-stats-machines">0</strong><span>Maskinar med feilmeldingar</span></div>
+      </div>
+      <p class="dealer-help">Feilmeldingar som blir sende inn under <strong>☰ → Rapporter</strong>, kjem hit. Opna maskinnamnet for å sjå alle feila som er melde på den maskina. Vel <strong>Status</strong> på ei feilmelding for å følgja arbeidet frå Open til Ferdig. Desse føringane er skilde frå vanleg servicehistorikk.</p>
+      <div class="fault-search">
+        <label for="fault-search">Søk etter maskin eller feilmelding</label>
+        <div class="fault-search-row">
+          <input id="fault-search" type="search" placeholder="Skriv maskinnamn, modell eller feil ..." autocomplete="off" aria-controls="fault-board-list" aria-describedby="fault-search-hint">
+          <button type="button" id="fault-search-clear" class="btn secondary" hidden>Tøm søk</button>
+        </div>
+        <p id="fault-search-hint" class="fault-search-hint" role="status" aria-live="polite">Søk for å finna ei maskin raskt. Alle feilmeldingar blir bevarte.</p>
+      </div>
+      <p id="fault-board-feedback" class="notice ok" role="status" aria-live="polite" hidden></p>
+      <div id="fault-board-list" class="fault-board-list"><div class="empty">Ingen feilmeldingar registrerte enno.</div></div>
+    </section>
+    <p class="note">Mekanikarlista, servicehistorikken, serviceintervalla og feilmeldingane blir lagra lokalt i nettlesaren på denne PC-en. Dei blir ikkje delte med andre brukarar før appen får ein felles database.</p>
+  </section>
+  <section id="rapporter" class="page" hidden>
+    <h1>Rapporter</h1>
+    <section class="card report-form-card" aria-labelledby="fault-form-title">
+      <h2 id="fault-form-title">Feilmelding</h2>
+      <p class="dealer-help">Bruk dette skjemaet når du oppdagar noko på ei maskin som må reparerast eller ordnast <strong>utanom vanleg service</strong>. Feilmeldinga blir lagd under maskina i Service bok → Feilmeldingar.</p>
+      <form id="fault-form" novalidate>
+        <div class="fault-form-grid">
+          <div class="field"><label for="fault-machine">Maskin *</label><select id="fault-machine" required><option value="">Vel maskin</option></select><p id="fault-machine-hint" class="fault-field-hint">Vel ei maskin frå Maskinregisteret.</p></div>
+          <div class="field"><label for="fault-date">Dato feilen vart oppdaga *</label><input id="fault-date" type="date" required></div>
+          <div class="field fault-span"><label for="fault-title">Kva er gale? *</label><input id="fault-title" type="text" maxlength="160" required placeholder="Til dømes hydraulikklekkasje eller øydelagd lykt"></div>
+          <div class="field"><label for="fault-priority">Kor hastar det?</label><select id="fault-priority"><option value="normal">Vanleg</option><option value="hastar">Hastar</option><option value="akutt">Kritisk – bør stoppast</option></select></div>
+          <div class="field"><label for="fault-hours">Timetal då feilen vart oppdaga <span class="optional">(valfritt)</span></label><input id="fault-hours" type="text" inputmode="decimal" maxlength="20" placeholder="Til dømes 2450"></div>
+          <div class="field fault-span"><label for="fault-description">Beskriv feilen og kva som må fiksast *</label><textarea id="fault-description" maxlength="6000" required placeholder="Kvar på maskina er feilen? Kva har skjedd? Kva trengst for å retta feilen?"></textarea></div>
+        </div>
+        <p class="fault-creator-note">Meldt av: <strong id="fault-creator">Innlogga brukar</strong></p>
+        <div class="actions"><button id="fault-save" type="submit" class="btn primary">+ Send inn feilmelding</button><button id="fault-cancel" type="button" class="btn secondary" hidden>Avbryt redigering</button></div>
+        <p id="fault-feedback" class="feedback" role="status" aria-live="polite"></p>
+      </form>
+      <p class="note">Feilmeldinga blir lagra i denne nettlesaren. Ho blir ikkje automatisk sendt som e-post eller delt med andre PC-ar. Felles rapportering på GitHub Pages krev ein database og ein server.</p>
+    </section>
+  </section>
+  <section id="ansatte" class="page" hidden>
+    <h1>Ansatte</h1>
+    <div class="notice warning employee-warning"><strong>Viktig om lokal innlogging:</strong> PIN og roller blir lagra lokalt i nettlesaren på denne PC-en. Dette er ikkje sikker tilgangskontroll eller ei felles løysing for fleire PC-ar. E-post blir ikkje sendt automatisk – du må opna og senda invitasjonen i e-postprogrammet ditt.</div>
+    <div id="employee-setup-note" class="notice ok" hidden><strong>Første oppsett:</strong> Vel stillinga di, skriv namn, e-post og PIN, og trykk på knappen for den stillinga du har valt. Den første brukaren blir aktivert lokalt. Vel du ei anna stilling enn Administrator, kan du leggja til ein administrator etterpå.</div>
+    <div id="employee-bootstrap-note" class="notice warning" hidden><strong>Administrator manglar:</strong> Den første brukaren kan mellombels leggja til og invitera ein administrator. Når administratoren har stadfesta stillinga si, blir tilsetthandteringa overført til administratoren.</div>
+    <div id="employee-admin-panel" class="employee-admin-panel">
+      <section class="card employee-form-card" id="employee-form-card">
+        <h2 id="employee-form-title">Opprett tilsett</h2>
+        <p class="dealer-help">Vel stilling og ein mellombels PIN. Den tilsette loggar inn med e-post og PIN, og stadfestar deretter stillinga med koden du sender på e-post. Del PIN separat, ikkje i same e-post.</p>
+        <p class="dealer-help"><strong>Tilgang:</strong> Administrator: alle menyar. Service folk: Oversikt, Rapporter, Service bok og Maskinregisteret. Maskinfører, Lastebil sjåfør og Alt mulig: berre Oversikt og Rapporter. Dersom den første brukaren ikkje er administrator, får denne mellombels tilgang til Ansatte for å oppretta ein administrator.</p>
+        <form id="employee-form" novalidate>
+          <div class="employee-fields">
+            <div class="field"><label for="employee-name">Namn *</label><input id="employee-name" type="text" maxlength="120" autocomplete="name" required placeholder="Fornamn Etternamn"></div>
+            <div class="field"><label for="employee-email">E-postadresse *</label><input id="employee-email" type="email" maxlength="254" autocomplete="email" required placeholder="namn@firma.no"></div>
+            <div class="field"><label for="employee-role">Stilling / rolle *</label><select id="employee-role" required></select><div id="employee-custom-role-field" class="employee-custom-role" hidden><input id="employee-custom-role" type="text" maxlength="80" placeholder="Skriv inn stilling" autocomplete="off"></div></div>
+            <div class="field"><label for="employee-initial-pin">PIN (4–8 siffer) <span id="employee-pin-optional" class="optional"></span></label><input id="employee-initial-pin" type="password" inputmode="numeric" minlength="4" maxlength="8" autocomplete="new-password" placeholder="Til dømes 123456"></div>
+          </div>
+          <p id="employee-role-help" class="employee-role-help" aria-live="polite"></p>
+          <div class="actions"><button id="employee-save" type="submit" class="btn primary">+ Legg til tilsett</button><button id="employee-cancel" type="button" class="btn secondary" hidden>Avbryt redigering</button></div>
+          <p id="employee-feedback" class="feedback" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+    </div>
+    <div id="employee-access-note" class="notice warning" hidden></div>
+    <section class="card employee-list-card" id="employee-list-card">
+        <div class="listhead"><h2>Registrerte tilsette</h2><span id="employee-count" class="count">0 tilsette</span></div>
+        <p class="dealer-help">Nye tilsette blir lagde inn her med ein gong du trykkjer Opprett. Mappene med tilsette er opne, og du kan trykkja på namnet for å sjå meir.</p>
+        <p id="employee-list-notice" class="employee-list-notice" role="status" aria-live="polite" hidden></p>
+        <div id="employee-list" class="employee-list"><div class="empty">Ingen tilsette registrerte enno.</div></div>
+    </section>
+
+    <section id="employee-recovery-panel" class="card" hidden>
+      <details id="employee-recovery-details">
+        <summary>🔐 Gjenopprettingskode – berre administrator</summary>
+        <div class="employee-recovery-inner">
+          <p class="dealer-help">Her kan administrator laga og sjå ein <strong>ny gjenopprettingskode for sin eigen konto</strong>. Den gamle koden kan ikkje visast fordi han ikkje blir lagra i klartekst. Når du lagar ein ny kode, sluttar den førre å verka.</p>
+          <form id="employee-recovery-create-form" autocomplete="off">
+            <div class="field">
+              <label for="employee-recovery-admin-pin">Stadfest din eigen PIN-kode (4–8 siffer)</label>
+              <input id="employee-recovery-admin-pin" type="password" inputmode="numeric" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="current-password" required placeholder="PIN-koden din">
+            </div>
+            <button id="employee-recovery-create" type="submit" class="btn primary">Lag og vis ny gjenopprettingskode</button>
+            <p id="employee-recovery-feedback" class="feedback" role="status" aria-live="polite"></p>
+          </form>
+          <div id="employee-recovery-result" class="employee-recovery-code" hidden>
+            <strong>Din nye gjenopprettingskode:</strong>
+            <code id="employee-recovery-code" aria-live="polite"></code>
+            <p class="dealer-help">Skriv ned koden og oppbevar han trygt. Han blir berre vist her no. Lukk menyen når du er ferdig.</p>
+            <div class="actions"><button type="button" id="employee-recovery-copy" class="btn secondary">Kopier koden</button><button type="button" id="employee-recovery-hide" class="btn secondary">Skjul koden</button></div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+  </section>
+</main>
+<footer>Engelsen Anlegg service logg</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4"></script>
+<script src="config.js"></script>
+<script src="cloud.js"></script>
+
+</body>
+</html>
